@@ -38,6 +38,14 @@ impl InstallLayout {
         self.child("data\\workspace")
     }
 
+    pub fn managed_skills_dir(&self) -> PathBuf {
+        self.child("data\\skills")
+    }
+
+    pub fn npmrc_path(&self) -> PathBuf {
+        self.child("data\\config\\npmrc")
+    }
+
     pub fn openclaw_config_path(&self) -> PathBuf {
         self.child("data\\config\\openclaw.json")
     }
