@@ -6,12 +6,15 @@ export component MainWindow inherits Window {
     in-out property <string> port: "";
 
     callback open_web_ui;
-    callback view_logs;
+    callback open_log_dir;
+    callback open_config_dir;
+    callback validate_config;
+    callback check_skills;
     callback exit_app;
 
     title: "OpenClaw Launcher";
-    width: 520px;
-    height: 280px;
+    width: 620px;
+    height: 340px;
 
     VerticalBox {
         spacing: 10px;
@@ -29,18 +32,37 @@ export component MainWindow inherits Window {
             spacing: 8px;
 
             Button {
-                text: "打开 Web UI";
+                text: "重新打开 Web UI";
                 clicked => { root.open_web_ui(); }
             }
 
             Button {
-                text: "查看日志";
-                clicked => { root.view_logs(); }
+                text: "打开日志目录";
+                clicked => { root.open_log_dir(); }
             }
 
             Button {
                 text: "退出";
                 clicked => { root.exit_app(); }
+            }
+        }
+
+        HorizontalBox {
+            spacing: 8px;
+
+            Button {
+                text: "打开配置目录";
+                clicked => { root.open_config_dir(); }
+            }
+
+            Button {
+                text: "验证配置";
+                clicked => { root.validate_config(); }
+            }
+
+            Button {
+                text: "检查 skills";
+                clicked => { root.check_skills(); }
             }
         }
     }

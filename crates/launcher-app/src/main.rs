@@ -1,4 +1,6 @@
 mod app;
+mod browser;
+mod diagnostics;
 mod launcher;
 mod state;
 
