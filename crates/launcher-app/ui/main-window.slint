@@ -1,0 +1,47 @@
+import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    in-out property <string> state_text: "Idle";
+    in-out property <string> install_root: "";
+    in-out property <string> port: "";
+
+    callback open_web_ui;
+    callback view_logs;
+    callback exit_app;
+
+    title: "OpenClaw Launcher";
+    width: 520px;
+    height: 280px;
+
+    VerticalBox {
+        spacing: 10px;
+
+        Text {
+            text: "OpenClaw Launcher";
+            font-size: 24px;
+        }
+
+        Text { text: "State: " + root.state_text; }
+        Text { text: "Install Root: " + root.install_root; }
+        Text { text: "Port: " + root.port; }
+
+        HorizontalBox {
+            spacing: 8px;
+
+            Button {
+                text: "打开 Web UI";
+                clicked => { root.open_web_ui(); }
+            }
+
+            Button {
+                text: "查看日志";
+                clicked => { root.view_logs(); }
+            }
+
+            Button {
+                text: "退出";
+                clicked => { root.exit_app(); }
+            }
+        }
+    }
+}

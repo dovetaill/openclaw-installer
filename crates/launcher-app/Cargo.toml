@@ -1,6 +1,14 @@
 [package]
 name = "launcher-app"
 version = "0.1.0"
+build = "build.rs"
 edition = "2021"
 
 [dependencies]
+slint = "1.14"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+runtime-config = { path = "../runtime-config" }
+process-supervisor = { path = "../process-supervisor" }
+
+[build-dependencies]
+slint-build = "1.14"
