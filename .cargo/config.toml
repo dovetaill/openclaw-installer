@@ -1,0 +1,6 @@
+# 使用项目级 Cargo mirror，避免污染系统级配置。
+[source.crates-io]
+replace-with = "aliyun"
+
+[source.aliyun]
+registry = "sparse+https://mirrors.aliyun.com/crates.io-index/"

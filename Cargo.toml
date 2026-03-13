@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "crates/launcher-app",
+  "crates/runtime-config",
+  "crates/process-supervisor",
+]
+resolver = "2"
