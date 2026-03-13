@@ -1,0 +1,163 @@
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use runtime_config::env::{build_launcher_env, child_process_path};
+use runtime_config::layout::InstallLayout;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::{Child, Command};
+
+use crate::port_probe::choose_openclaw_port;
+use crate::readiness::wait_for_tcp_ready;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SupervisorStatus {
+    Idle,
+    Starting,
+    Ready,
+    Failed,
+    Stopped,
+}
+
+pub struct ProcessSupervisor {
+    child: Option<Child>,
+    current_port: Option<u16>,
+    status: SupervisorStatus,
+    stdout_lines: Arc<Mutex<Vec<String>>>,
+    stderr_lines: Arc<Mutex<Vec<String>>>,
+}
+
+impl Default for ProcessSupervisor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProcessSupervisor {
+    pub fn new() -> Self {
+        Self {
+            child: None,
+            current_port: None,
+            status: SupervisorStatus::Idle,
+            stdout_lines: Arc::new(Mutex::new(Vec::new())),
+            stderr_lines: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub async fn start(&mut self, layout: &InstallLayout) -> io::Result<u16> {
+        let port = choose_openclaw_port()?;
+        self.start_with_port(layout, port).await
+    }
+
+    pub async fn start_with_port(&mut self, layout: &InstallLayout, port: u16) -> io::Result<u16> {
+        let node_exe = windows_child(&layout.node_dir(), "node.exe");
+        let openclaw_entry = windows_child(&layout.openclaw_dir(), "openclaw.mjs");
+
+        if !node_exe.exists() {
+            self.status = SupervisorStatus::Failed;
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("missing embedded runtime: {}", node_exe.to_string_lossy()),
+            ));
+        }
+
+        if !openclaw_entry.exists() {
+            self.status = SupervisorStatus::Failed;
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("missing OpenClaw entrypoint: {}", openclaw_entry.to_string_lossy()),
+            ));
+        }
+
+        let mut command = Command::new(&node_exe);
+        command.arg(&openclaw_entry);
+        command.arg("--port");
+        command.arg(port.to_string());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        for (key, value) in build_launcher_env(layout) {
+            command.env(key, value);
+        }
+
+        let mut current_env = std::env::vars_os();
+        command.env("PATH", child_process_path(layout, &mut current_env));
+
+        self.status = SupervisorStatus::Starting;
+        let mut child = command.spawn()?;
+
+        if let Some(stdout) = child.stdout.take() {
+            collect_output(stdout, self.stdout_lines.clone());
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            collect_output(stderr, self.stderr_lines.clone());
+        }
+
+        self.current_port = Some(port);
+        self.child = Some(child);
+
+        match wait_for_tcp_ready(port, 20, Duration::from_millis(250)).await {
+            Ok(()) => {
+                self.status = SupervisorStatus::Ready;
+                Ok(port)
+            }
+            Err(error) => {
+                self.status = SupervisorStatus::Failed;
+                Err(error)
+            }
+        }
+    }
+
+    pub async fn stop(&mut self) -> io::Result<()> {
+        if let Some(child) = self.child.as_mut() {
+            if child.try_wait()?.is_none() {
+                child.kill().await?;
+            }
+        }
+
+        self.child = None;
+        self.current_port = None;
+        self.status = SupervisorStatus::Stopped;
+        Ok(())
+    }
+
+    pub async fn restart(&mut self, layout: &InstallLayout) -> io::Result<u16> {
+        self.stop().await?;
+        self.start(layout).await
+    }
+
+    pub fn status(&self) -> SupervisorStatus {
+        self.status
+    }
+
+    pub fn current_port(&self) -> Option<u16> {
+        self.current_port
+    }
+
+    pub fn stdout_lines(&self) -> Vec<String> {
+        self.stdout_lines.lock().unwrap().clone()
+    }
+
+    pub fn stderr_lines(&self) -> Vec<String> {
+        self.stderr_lines.lock().unwrap().clone()
+    }
+}
+
+fn collect_output<R>(reader: R, sink: Arc<Mutex<Vec<String>>>)
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(reader).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            sink.lock().unwrap().push(line);
+        }
+    });
+}
+
+fn windows_child(base: &Path, leaf: &str) -> PathBuf {
+    PathBuf::from(format!(r"{}\{}", base.to_string_lossy(), leaf))
+}
