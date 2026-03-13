@@ -466,3 +466,7 @@ skills 相关配置保留 OpenClaw 官方结构：
 
 - `docs/plans/2026-03-13-openclaw-windows-native-installer-implementation-plan.md`
 
+## 实施引用
+
+- Implementation plan: `docs/plans/2026-03-13-openclaw-windows-native-installer-implementation-plan.md`
+- Release runbook: `docs/release/windows-installer.md`
