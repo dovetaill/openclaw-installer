@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "node_version": "24.x",
+  "entries": [
+    { "name": "node", "path": "app/node" },
+    { "name": "openclaw", "path": "app/openclaw" }
+  ]
+}
