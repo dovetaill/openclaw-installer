@@ -11,8 +11,12 @@ RequestExecutionLevel user
 !define STAGE_DIR "payload"
 !endif
 
+!ifndef OUTPUT_FILE
+!define OUTPUT_FILE "OpenClaw-Setup.exe"
+!endif
+
 Name "${PRODUCT_NAME}"
-OutFile "OpenClaw-Setup.exe"
+OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\OpenClaw"
 InstallDirRegKey HKCU "${PRODUCT_UNINSTALL_KEY}" "InstallLocation"
 ShowInstDetails show
@@ -39,12 +43,12 @@ Section "Install"
   CreateDirectory "$INSTDIR\${APP_SUBDIR}"
   CreateDirectory "$INSTDIR\${DATA_SUBDIR}"
 
-  File /oname=${LAUNCHER_EXE} "${STAGE_DIR}\${LAUNCHER_EXE}"
-  File /oname=manifest.json "${STAGE_DIR}\manifest.json"
+  File "${STAGE_DIR}/${LAUNCHER_EXE}"
+  File "${STAGE_DIR}/manifest.json"
   SetOutPath "$INSTDIR\${APP_SUBDIR}"
-  File /r "${STAGE_DIR}\${APP_SUBDIR}\*.*"
+  File /r "${STAGE_DIR}/${APP_SUBDIR}/*.*"
   SetOutPath "$INSTDIR\${DATA_SUBDIR}"
-  File /r "${STAGE_DIR}\${DATA_SUBDIR}\*.*"
+  File /r "${STAGE_DIR}/${DATA_SUBDIR}/*.*"
   SetOutPath "$INSTDIR"
 
   !insertmacro OpenClaw_WriteUninstaller
