@@ -1,3 +1,5 @@
+use process_supervisor::supervisor::SupervisorStatus;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LauncherState {
@@ -19,6 +21,13 @@ pub enum LauncherEvent {
     StopRequested,
     Stopped,
     Reset,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenWebUiAction {
+    StartGateway,
+    WaitForExistingStart,
+    OpenBrowser,
 }
 
 impl LauncherState {
@@ -49,6 +58,16 @@ impl LauncherState {
             Self::Ready => "Ready",
             Self::Error => "Error",
             Self::Stopping => "Stopping",
+        }
+    }
+}
+
+pub fn open_web_ui_action(status: SupervisorStatus) -> OpenWebUiAction {
+    match status {
+        SupervisorStatus::Starting => OpenWebUiAction::WaitForExistingStart,
+        SupervisorStatus::Ready => OpenWebUiAction::OpenBrowser,
+        SupervisorStatus::Idle | SupervisorStatus::Failed | SupervisorStatus::Stopped => {
+            OpenWebUiAction::StartGateway
         }
     }
 }

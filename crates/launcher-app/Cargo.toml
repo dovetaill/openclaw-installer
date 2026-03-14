@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 slint = "1.14"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+async-compat = "0.2"
 runtime-config = { path = "../runtime-config" }
 process-supervisor = { path = "../process-supervisor" }
 serde = { version = "1", features = ["derive"] }

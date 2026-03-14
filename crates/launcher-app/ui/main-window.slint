@@ -4,6 +4,8 @@ export component MainWindow inherits Window {
     in-out property <string> window_title_text: "OpenClaw Launcher";
     in-out property <string> heading_text: "OpenClaw Launcher";
     in-out property <string> state_text: "Idle";
+    in-out property <string> detail_text: "";
+    in-out property <bool> open_web_ui_enabled: true;
     in-out property <string> runtime_label: "Runtime: unknown";
     in-out property <string> install_root: "";
     in-out property <string> installer_repo_url: "";
@@ -31,6 +33,7 @@ export component MainWindow inherits Window {
 
         Text { text: root.runtime_label; }
         Text { text: "State: " + root.state_text; }
+        Text { text: "Detail: " + root.detail_text; }
         Text { text: "Install Root: " + root.install_root; }
         Text { text: "Port: " + root.port; }
         Text { text: "Installer: " + root.installer_repo_url; }
@@ -40,6 +43,7 @@ export component MainWindow inherits Window {
 
             Button {
                 text: "重新打开 Web UI";
+                enabled: root.open_web_ui_enabled;
                 clicked => { root.open_web_ui(); }
             }
 

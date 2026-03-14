@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -21,10 +22,13 @@ pub enum SupervisorStatus {
     Stopped,
 }
 
+pub const STARTUP_POLL_INTERVAL: Duration = Duration::from_millis(250);
+pub const STARTUP_MAX_ATTEMPTS: usize = 180;
+
 pub struct ProcessSupervisor {
-    child: Option<Child>,
-    current_port: Option<u16>,
-    status: SupervisorStatus,
+    child: RefCell<Option<Child>>,
+    current_port: Cell<Option<u16>>,
+    status: Cell<SupervisorStatus>,
     stdout_lines: Arc<Mutex<Vec<String>>>,
     stderr_lines: Arc<Mutex<Vec<String>>>,
 }
@@ -39,6 +43,35 @@ pub fn openclaw_gateway_args(port: u16) -> Vec<String> {
     ]
 }
 
+pub fn startup_timeout() -> Duration {
+    Duration::from_millis(STARTUP_POLL_INTERVAL.as_millis() as u64 * STARTUP_MAX_ATTEMPTS as u64)
+}
+
+pub fn format_start_failure(error: &io::Error, stderr_lines: &[String]) -> String {
+    const MAX_STDERR_LINES: usize = 8;
+
+    if stderr_lines.is_empty() {
+        return error.to_string();
+    }
+
+    let recent_lines = stderr_lines
+        .iter()
+        .rev()
+        .take(MAX_STDERR_LINES)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    format!(
+        "{error}\nRecent stderr:\n{}",
+        recent_lines
+            .into_iter()
+            .rev()
+            .map(|line| format!("- {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
+}
+
 impl Default for ProcessSupervisor {
     fn default() -> Self {
         Self::new()
@@ -48,25 +81,39 @@ impl Default for ProcessSupervisor {
 impl ProcessSupervisor {
     pub fn new() -> Self {
         Self {
-            child: None,
-            current_port: None,
-            status: SupervisorStatus::Idle,
+            child: RefCell::new(None),
+            current_port: Cell::new(None),
+            status: Cell::new(SupervisorStatus::Idle),
             stdout_lines: Arc::new(Mutex::new(Vec::new())),
             stderr_lines: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    pub async fn start(&mut self, layout: &InstallLayout) -> io::Result<u16> {
+    pub async fn start(&self, layout: &InstallLayout) -> io::Result<u16> {
         let port = choose_openclaw_port()?;
         self.start_with_port(layout, port).await
     }
 
-    pub async fn start_with_port(&mut self, layout: &InstallLayout, port: u16) -> io::Result<u16> {
+    pub async fn start_with_port(&self, layout: &InstallLayout, port: u16) -> io::Result<u16> {
+        self.refresh_terminated_child();
+
+        if matches!(
+            self.status.get(),
+            SupervisorStatus::Starting | SupervisorStatus::Ready
+        ) {
+            if let Some(current_port) = self.current_port.get() {
+                return Ok(current_port);
+            }
+        }
+
+        self.cleanup_child().await?;
+        self.clear_output_buffers();
+
         let node_exe = windows_child(&layout.node_dir(), "node.exe");
         let openclaw_entry = windows_child(&layout.openclaw_dir(), "openclaw.mjs");
 
         if !node_exe.exists() {
-            self.status = SupervisorStatus::Failed;
+            self.fail_start();
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 format!("missing embedded runtime: {}", node_exe.to_string_lossy()),
@@ -74,10 +121,13 @@ impl ProcessSupervisor {
         }
 
         if !openclaw_entry.exists() {
-            self.status = SupervisorStatus::Failed;
+            self.fail_start();
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("missing OpenClaw entrypoint: {}", openclaw_entry.to_string_lossy()),
+                format!(
+                    "missing OpenClaw entrypoint: {}",
+                    openclaw_entry.to_string_lossy()
+                ),
             ));
         }
 
@@ -94,8 +144,14 @@ impl ProcessSupervisor {
         let mut current_env = std::env::vars_os();
         command.env("PATH", child_process_path(layout, &mut current_env));
 
-        self.status = SupervisorStatus::Starting;
-        let mut child = command.spawn()?;
+        self.status.set(SupervisorStatus::Starting);
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                self.fail_start();
+                return Err(error);
+            }
+        };
 
         if let Some(stdout) = child.stdout.take() {
             collect_output(stdout, self.stdout_lines.clone());
@@ -105,45 +161,49 @@ impl ProcessSupervisor {
             collect_output(stderr, self.stderr_lines.clone());
         }
 
-        self.current_port = Some(port);
-        self.child = Some(child);
+        self.current_port.set(Some(port));
+        self.child.replace(Some(child));
 
-        match wait_for_tcp_ready(port, 20, Duration::from_millis(250)).await {
+        match wait_for_tcp_ready(port, STARTUP_MAX_ATTEMPTS, STARTUP_POLL_INTERVAL).await {
             Ok(()) => {
-                self.status = SupervisorStatus::Ready;
+                self.status.set(SupervisorStatus::Ready);
                 Ok(port)
             }
             Err(error) => {
-                self.status = SupervisorStatus::Failed;
+                let cleanup_error = self.cleanup_child().await.err();
+                self.status.set(SupervisorStatus::Failed);
+
+                if let Some(cleanup_error) = cleanup_error {
+                    return Err(io::Error::new(
+                        cleanup_error.kind(),
+                        format!("{error}; cleanup failed: {cleanup_error}"),
+                    ));
+                }
+
                 Err(error)
             }
         }
     }
 
-    pub async fn stop(&mut self) -> io::Result<()> {
-        if let Some(child) = self.child.as_mut() {
-            if child.try_wait()?.is_none() {
-                child.kill().await?;
-            }
-        }
-
-        self.child = None;
-        self.current_port = None;
-        self.status = SupervisorStatus::Stopped;
+    pub async fn stop(&self) -> io::Result<()> {
+        self.cleanup_child().await?;
+        self.status.set(SupervisorStatus::Stopped);
         Ok(())
     }
 
-    pub async fn restart(&mut self, layout: &InstallLayout) -> io::Result<u16> {
+    pub async fn restart(&self, layout: &InstallLayout) -> io::Result<u16> {
         self.stop().await?;
         self.start(layout).await
     }
 
     pub fn status(&self) -> SupervisorStatus {
-        self.status
+        self.refresh_terminated_child();
+        self.status.get()
     }
 
     pub fn current_port(&self) -> Option<u16> {
-        self.current_port
+        self.refresh_terminated_child();
+        self.current_port.get()
     }
 
     pub fn stdout_lines(&self) -> Vec<String> {
@@ -152,6 +212,58 @@ impl ProcessSupervisor {
 
     pub fn stderr_lines(&self) -> Vec<String> {
         self.stderr_lines.lock().unwrap().clone()
+    }
+
+    fn clear_output_buffers(&self) {
+        self.stdout_lines.lock().unwrap().clear();
+        self.stderr_lines.lock().unwrap().clear();
+    }
+
+    fn fail_start(&self) {
+        self.current_port.set(None);
+        self.status.set(SupervisorStatus::Failed);
+    }
+
+    fn refresh_terminated_child(&self) {
+        let child_exited = {
+            let mut child_slot = self.child.borrow_mut();
+            match child_slot.as_mut() {
+                Some(child) => match child.try_wait() {
+                    Ok(Some(_)) | Err(_) => true,
+                    Ok(None) => false,
+                },
+                None => false,
+            }
+        };
+
+        if child_exited {
+            self.child.borrow_mut().take();
+            self.current_port.set(None);
+
+            if matches!(
+                self.status.get(),
+                SupervisorStatus::Starting | SupervisorStatus::Ready
+            ) {
+                self.status.set(SupervisorStatus::Failed);
+            }
+        }
+    }
+
+    async fn cleanup_child(&self) -> io::Result<()> {
+        let child = self.child.borrow_mut().take();
+
+        if let Some(mut child) = child {
+            match child.try_wait()? {
+                Some(_) => {}
+                None => {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                }
+            }
+        }
+
+        self.current_port.set(None);
+        Ok(())
     }
 }
 

@@ -2,7 +2,6 @@ mod app;
 mod browser;
 mod diagnostics;
 mod install_root;
-mod launch_flow;
 mod launcher;
 mod metadata;
 mod state;
