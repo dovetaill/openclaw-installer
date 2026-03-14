@@ -1,6 +1,14 @@
 {
   "version": "0.1.0",
+  "installer_version": "0.1.0",
   "node_version": "24.x",
+  "runtime_source": "translated",
+  "runtime_package": "@qingchencloud/openclaw-zh",
+  "runtime_version": "",
+  "runtime_release_tag": "",
+  "runtime_release_url": "",
+  "runtime_display_name": "OpenClawChineseTranslation",
+  "runtime_display_version": "OpenClawChineseTranslation",
   "entries": [
     { "name": "node", "path": "app/node" },
     { "name": "openclaw", "path": "app/openclaw" }

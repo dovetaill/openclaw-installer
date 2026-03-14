@@ -25,8 +25,10 @@ LOG_FILE="${TMP_DIR}/build.log"
 INSTALL_MARKER="${TMP_DIR}/cargo-xwin-installed"
 EXPECTED_XWIN_CACHE_DIR="${MOCK_ROOT}/.build/windows-x64/xwin-cache"
 OPENCLAW_REGISTRY_URL="https://mirror.example/npm"
-OPENCLAW_META_URL="${OPENCLAW_REGISTRY_URL}/openclaw"
-OPENCLAW_TARBALL_URL="https://mirror.example/tarballs/openclaw-2026.3.12.tgz"
+OPENCLAW_PACKAGE="@qingchencloud/openclaw-zh"
+OPENCLAW_META_URL="${OPENCLAW_REGISTRY_URL}/${OPENCLAW_PACKAGE}"
+OPENCLAW_TARBALL_URL="https://mirror.example/tarballs/openclaw-zh-2026.3.12-zh.2.tgz"
+OPENCLAW_RELEASE_URL="https://api.github.com/repos/1186258278/OpenClawChineseTranslation/releases/latest"
 NODE_INDEX_URL="https://mirror.example/node/index.json"
 NODE_DIST_BASE_URL="https://mirror.example/node/dist"
 NODE_ZIP_URL="${NODE_DIST_BASE_URL}/v24.14.0/node-v24.14.0-win-x64.zip"
@@ -48,7 +50,7 @@ printf 'nsis\n' > "${MOCK_ROOT}/packaging/windows/openclaw-installer.nsi"
 
 mkdir -p "${FIXTURE_DIR}/openclaw/package/dist" "${FIXTURE_DIR}/openclaw/package/assets" "${FIXTURE_DIR}/openclaw/package/extensions" "${FIXTURE_DIR}/openclaw/package/skills/demo"
 printf '#!/usr/bin/env node\n' > "${FIXTURE_DIR}/openclaw/package/openclaw.mjs"
-printf '{"name":"openclaw","version":"2026.3.12","engines":{"node":">=22.16.0"},"dependencies":{"chalk":"^5.6.2"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
+printf '{"name":"@qingchencloud/openclaw-zh","version":"2026.3.12-zh.2","engines":{"node":">=22.16.0"},"dependencies":{"chalk":"^5.6.2"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
 printf 'export const entry = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/entry.js"
 printf 'export const boot = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/index.js"
 printf 'asset\n' > "${FIXTURE_DIR}/openclaw/package/assets/icon.txt"
@@ -65,10 +67,10 @@ printf 'npx shim\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/npx.cmd"
 cat > "${FIXTURE_DIR}/openclaw-npm.json" <<EOF
 {
   "dist-tags": {
-    "latest": "2026.3.12"
+    "latest": "2026.3.12-zh.2"
   },
   "versions": {
-    "2026.3.12": {
+    "2026.3.12-zh.2": {
       "dist": {
         "tarball": "${OPENCLAW_TARBALL_URL}"
       },
@@ -77,6 +79,13 @@ cat > "${FIXTURE_DIR}/openclaw-npm.json" <<EOF
       }
     }
   }
+}
+EOF
+
+cat > "${FIXTURE_DIR}/openclaw-release.json" <<'EOF'
+{
+  "tag_name": "v2026.3.12-zh.2",
+  "html_url": "https://github.com/1186258278/OpenClawChineseTranslation/releases/tag/v2026.3.12-zh.2"
 }
 EOF
 
@@ -128,6 +137,7 @@ fi
 case "\${url}" in
   "${OPENCLAW_META_URL}") src="\${fixture_dir}/openclaw-npm.json" ;;
   "${OPENCLAW_TARBALL_URL}") src="\${fixture_dir}/openclaw.tgz" ;;
+  "${OPENCLAW_RELEASE_URL}") src="\${fixture_dir}/openclaw-release.json" ;;
   "${NODE_INDEX_URL}") src="\${fixture_dir}/node-index.json" ;;
   "${NODE_ZIP_URL}") src="\${fixture_dir}/node.zip" ;;
   *)
@@ -239,13 +249,13 @@ grep -Fq '+ cargo install cargo-xwin --locked' "${LOG_FILE}" || {
 }
 
 grep -Fq "${OPENCLAW_META_URL}" "${LOG_FILE}" || {
-  echo "expected linux build script to download latest openclaw npm metadata" >&2
+  echo "expected linux build script to download latest translated OpenClaw npm metadata" >&2
   cat "${LOG_FILE}" >&2
   exit 1
 }
 
 grep -Fq "${OPENCLAW_TARBALL_URL}" "${LOG_FILE}" || {
-  echo "expected linux build script to download latest openclaw npm tarball" >&2
+  echo "expected linux build script to download latest translated OpenClaw npm tarball" >&2
   cat "${LOG_FILE}" >&2
   exit 1
 }
@@ -273,6 +283,18 @@ if [[ ! -f "${MOCK_ROOT}/packaging/windows/payload/app/openclaw/openclaw.mjs" ]]
   cat "${LOG_FILE}" >&2
   exit 1
 fi
+
+if [[ ! -f "${MOCK_ROOT}/.build/windows-x64/payload/manifest.json" ]]; then
+  echo "expected linux build script to stage a generated manifest.json" >&2
+  cat "${LOG_FILE}" >&2
+  exit 1
+fi
+
+grep -Fq '"runtime_source": "translated"' "${MOCK_ROOT}/.build/windows-x64/payload/manifest.json" || {
+  echo "expected generated manifest to record translated runtime source" >&2
+  cat "${MOCK_ROOT}/.build/windows-x64/payload/manifest.json" >&2
+  exit 1
+}
 
 if [[ ! -f "${MOCK_ROOT}/packaging/windows/payload/app/openclaw/dist/index.js" ]]; then
   echo "expected linux build script to stage OpenClaw dist assets from npm tarball" >&2

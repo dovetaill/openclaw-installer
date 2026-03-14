@@ -14,11 +14,21 @@ LAUNCHER_NAME="OpenClaw Launcher.exe"
 DRY_RUN="${DRY_RUN:-0}"
 DEFAULT_NPMRC_CONTENTS="registry=https://registry.npmmirror.com/"
 OPENCLAW_NPM_REGISTRY="${OPENCLAW_NPM_REGISTRY:-https://registry.npmmirror.com}"
+GITHUB_API_BASE_URL="${GITHUB_API_BASE_URL:-https://api.github.com}"
 NODE_INDEX_URL="${NODE_INDEX_URL:-https://nodejs.org/dist/index.json}"
 NODE_DIST_BASE_URL="${NODE_DIST_BASE_URL:-https://nodejs.org/dist}"
 OPENCLAW_TARGET_OS="${OPENCLAW_TARGET_OS:-win32}"
 OPENCLAW_TARGET_CPU="${OPENCLAW_TARGET_CPU:-x64}"
 OPENCLAW_NODE_ENGINE=""
+OPENCLAW_RUNTIME_SOURCE="translated"
+OPENCLAW_RUNTIME_PACKAGE="@qingchencloud/openclaw-zh"
+OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClawChineseTranslation"
+OPENCLAW_RUNTIME_REPO_OWNER="1186258278"
+OPENCLAW_RUNTIME_REPO_NAME="OpenClawChineseTranslation"
+OPENCLAW_RUNTIME_VERSION=""
+OPENCLAW_RUNTIME_RELEASE_TAG=""
+OPENCLAW_RUNTIME_RELEASE_URL=""
+GENERATED_MANIFEST_PATH="${BUILD_DIR}/manifest.generated.json"
 
 LAUNCHER_SRC="${ROOT_DIR}/target/${TARGET_TRIPLE}/release/launcher-app.exe"
 APP_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/app"
@@ -28,6 +38,15 @@ DATA_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/data"
 DATA_CONFIG_DIR="${DATA_PAYLOAD_DIR}/config"
 NPMRC_PATH="${DATA_CONFIG_DIR}/npmrc"
 PAYLOAD_VERIFY_SCRIPT="${ROOT_DIR}/scripts/verify-payload.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/build-win-x64.sh [--runtime-source translated|upstream]
+
+Defaults:
+  --runtime-source translated
+EOF
+}
 
 run() {
   echo "+ $*"
@@ -51,6 +70,71 @@ require_downloaded_path() {
   fi
 }
 
+normalize_runtime_source() {
+  local raw="$1"
+  case "${raw}" in
+    translated|zh|chinese)
+      printf 'translated\n'
+      ;;
+    upstream|native|official)
+      printf 'upstream\n'
+      ;;
+    *)
+      echo "unsupported runtime source: ${raw}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+configure_runtime_source() {
+  case "${OPENCLAW_RUNTIME_SOURCE}" in
+    translated)
+      OPENCLAW_RUNTIME_PACKAGE="@qingchencloud/openclaw-zh"
+      OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClawChineseTranslation"
+      OPENCLAW_RUNTIME_REPO_OWNER="1186258278"
+      OPENCLAW_RUNTIME_REPO_NAME="OpenClawChineseTranslation"
+      ;;
+    upstream)
+      OPENCLAW_RUNTIME_PACKAGE="openclaw"
+      OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClaw"
+      OPENCLAW_RUNTIME_REPO_OWNER="openclaw"
+      OPENCLAW_RUNTIME_REPO_NAME="openclaw"
+      ;;
+    *)
+      echo "runtime source not configured: ${OPENCLAW_RUNTIME_SOURCE}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --runtime-source)
+        if [[ $# -lt 2 ]]; then
+          echo "--runtime-source requires a value" >&2
+          exit 1
+        fi
+        OPENCLAW_RUNTIME_SOURCE="$(normalize_runtime_source "$2")"
+        shift 2
+        ;;
+      --runtime-source=*)
+        OPENCLAW_RUNTIME_SOURCE="$(normalize_runtime_source "${1#*=}")"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "unknown argument: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
 resolve_openclaw_npm_release() {
   local metadata_path="$1"
   python3 - "$metadata_path" <<'PY'
@@ -68,6 +152,32 @@ node_engine = version.get("engines", {}).get("node", "")
 print(latest)
 print(tarball)
 print(node_engine)
+PY
+}
+
+resolve_github_latest_release() {
+  local metadata_path="$1"
+  python3 - "$metadata_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+tag_name = str(data.get("tag_name", "")).strip()
+html_url = str(data.get("html_url", "")).strip()
+
+if not tag_name:
+    raise SystemExit("latest release response missing tag_name")
+
+if not html_url:
+    raise SystemExit("latest release response missing html_url")
+
+normalized = tag_name[1:] if tag_name.startswith("v") else tag_name
+
+print(tag_name)
+print(html_url)
+print(normalized)
 PY
 }
 
@@ -140,6 +250,7 @@ PY
 
 prepare_openclaw_payload() {
   local metadata_path="${DOWNLOAD_DIR}/openclaw-npm.json"
+  local release_path="${DOWNLOAD_DIR}/openclaw-release.json"
   local openclaw_tarball="${DOWNLOAD_DIR}/openclaw.tgz"
   local extract_root="${WORK_DIR}/openclaw"
   local install_root="${WORK_DIR}/openclaw-install"
@@ -147,14 +258,26 @@ prepare_openclaw_payload() {
   local dependencies_root="${install_root}/node_modules"
   local tarball_url
   local version
+  local release_api_url="${GITHUB_API_BASE_URL%/}/repos/${OPENCLAW_RUNTIME_REPO_OWNER}/${OPENCLAW_RUNTIME_REPO_NAME}/releases/latest"
 
-  download_file "${OPENCLAW_NPM_REGISTRY%/}/openclaw" "${metadata_path}"
+  download_file "${OPENCLAW_NPM_REGISTRY%/}/${OPENCLAW_RUNTIME_PACKAGE}" "${metadata_path}"
   mapfile -t openclaw_meta < <(resolve_openclaw_npm_release "${metadata_path}")
   version="${openclaw_meta[0]}"
   tarball_url="${openclaw_meta[1]}"
   OPENCLAW_NODE_ENGINE="${openclaw_meta[2]}"
+  OPENCLAW_RUNTIME_VERSION="${version}"
 
-  echo "syncing OpenClaw npm package ${version}"
+  download_file "${release_api_url}" "${release_path}"
+  mapfile -t release_meta < <(resolve_github_latest_release "${release_path}")
+  OPENCLAW_RUNTIME_RELEASE_TAG="${release_meta[0]}"
+  OPENCLAW_RUNTIME_RELEASE_URL="${release_meta[1]}"
+
+  if [[ "${OPENCLAW_RUNTIME_VERSION}" != "${release_meta[2]}" ]]; then
+    echo "GitHub latest release ${OPENCLAW_RUNTIME_RELEASE_TAG} does not match npm latest ${OPENCLAW_RUNTIME_VERSION} for ${OPENCLAW_RUNTIME_PACKAGE}" >&2
+    exit 1
+  fi
+
+  echo "syncing ${OPENCLAW_RUNTIME_DISPLAY_NAME} npm package ${version}"
   download_file "${tarball_url}" "${openclaw_tarball}"
 
   run rm -rf "${extract_root}" "${APP_OPENCLAW_DIR}"
@@ -229,11 +352,13 @@ prepare_node_payload() {
 
 prepare_runtime_payload() {
   echo "[1/5] sync runtime payload"
+  configure_runtime_source
 
   if [[ "${DRY_RUN}" == "1" ]]; then
-    echo "+ curl latest openclaw npm metadata from ${OPENCLAW_NPM_REGISTRY%/}/openclaw"
-    echo "+ download latest openclaw npm tarball"
-    echo "+ install openclaw production dependencies for ${OPENCLAW_TARGET_OS}/${OPENCLAW_TARGET_CPU}"
+    echo "+ curl latest ${OPENCLAW_RUNTIME_PACKAGE} npm metadata from ${OPENCLAW_NPM_REGISTRY%/}/${OPENCLAW_RUNTIME_PACKAGE}"
+    echo "+ curl latest GitHub release metadata for ${OPENCLAW_RUNTIME_REPO_OWNER}/${OPENCLAW_RUNTIME_REPO_NAME}"
+    echo "+ download latest ${OPENCLAW_RUNTIME_PACKAGE} npm tarball"
+    echo "+ install ${OPENCLAW_RUNTIME_PACKAGE} production dependencies for ${OPENCLAW_TARGET_OS}/${OPENCLAW_TARGET_CPU}"
     echo "+ download latest matching Windows Node x64 LTS zip from ${NODE_DIST_BASE_URL}"
     echo "+ refresh payload/app/openclaw and payload/app/node"
     return 0
@@ -241,6 +366,57 @@ prepare_runtime_payload() {
 
   prepare_openclaw_payload
   prepare_node_payload "${OPENCLAW_NODE_ENGINE}"
+}
+
+generate_manifest() {
+  python3 - \
+    "${ROOT_DIR}/manifest.json" \
+    "${GENERATED_MANIFEST_PATH}" \
+    "${OPENCLAW_RUNTIME_SOURCE}" \
+    "${OPENCLAW_RUNTIME_PACKAGE}" \
+    "${OPENCLAW_RUNTIME_VERSION}" \
+    "${OPENCLAW_RUNTIME_RELEASE_TAG}" \
+    "${OPENCLAW_RUNTIME_RELEASE_URL}" \
+    "${OPENCLAW_RUNTIME_DISPLAY_NAME}" <<'PY'
+import json
+import sys
+
+(
+    template_path,
+    output_path,
+    runtime_source,
+    runtime_package,
+    runtime_version,
+    runtime_release_tag,
+    runtime_release_url,
+    runtime_display_name,
+) = sys.argv[1:9]
+
+with open(template_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+installer_version = str(data.get("installer_version") or data.get("version") or "0.1.0")
+node_version = str(data.get("node_version") or "")
+entries = data.get("entries") or []
+
+result = dict(data)
+result["version"] = installer_version
+result["installer_version"] = installer_version
+result["node_version"] = node_version
+result["runtime_source"] = runtime_source
+result["runtime_package"] = runtime_package
+result["runtime_version"] = runtime_version
+result["runtime_release_tag"] = runtime_release_tag
+result["runtime_release_url"] = runtime_release_url
+display_version = f"{runtime_display_name} v{runtime_version}".strip() if runtime_version else runtime_display_name
+result["runtime_display_name"] = runtime_display_name
+result["runtime_display_version"] = display_version
+result["entries"] = entries
+
+with open(output_path, 'w', encoding='utf-8') as handle:
+    json.dump(result, handle, indent=2)
+    handle.write("\n")
+PY
 }
 
 ensure_npm() {
@@ -350,6 +526,7 @@ verify_payload() {
 }
 
 main() {
+  parse_args "$@"
   mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data" "${DIST_DIR}" "${DOWNLOAD_DIR}" "${WORK_DIR}" "${XWIN_CACHE_DIR}" "${NPM_CACHE_DIR}"
   if [[ "${DRY_RUN}" != "1" ]]; then
     rm -rf "${STAGE_DIR}/app" "${STAGE_DIR}/data"
@@ -375,8 +552,9 @@ main() {
   fi
 
   echo "[3/5] stage payload"
+  generate_manifest
   run cp "${LAUNCHER_SRC}" "${STAGE_DIR}/${LAUNCHER_NAME}"
-  run cp "${ROOT_DIR}/manifest.json" "${STAGE_DIR}/manifest.json"
+  run cp "${GENERATED_MANIFEST_PATH}" "${STAGE_DIR}/manifest.json"
   run cp -R "${APP_PAYLOAD_DIR}/." "${STAGE_DIR}/app/"
   run cp -R "${DATA_PAYLOAD_DIR}/." "${STAGE_DIR}/data/"
 

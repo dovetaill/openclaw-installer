@@ -8,17 +8,99 @@ STAGE_DIR="${BUILD_DIR}/payload"
 DIST_DIR="${BUILD_DIR}/dist"
 LAUNCHER_NAME="OpenClaw Launcher.exe"
 DRY_RUN="${DRY_RUN:-0}"
+OPENCLAW_RUNTIME_SOURCE="translated"
+OPENCLAW_RUNTIME_PACKAGE="@qingchencloud/openclaw-zh"
+OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClawChineseTranslation"
+OPENCLAW_RUNTIME_REPO_OWNER="1186258278"
+OPENCLAW_RUNTIME_REPO_NAME="OpenClawChineseTranslation"
+OPENCLAW_RUNTIME_VERSION=""
+OPENCLAW_RUNTIME_RELEASE_TAG=""
+OPENCLAW_RUNTIME_RELEASE_URL=""
+GENERATED_MANIFEST_PATH="${BUILD_DIR}/manifest.generated.json"
 
 LAUNCHER_SRC="${ROOT_DIR}/target/${TARGET_TRIPLE}/release/launcher-app.exe"
 APP_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/app"
 DATA_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/data"
 NSIS_SCRIPT="${ROOT_DIR}/packaging/windows/openclaw-installer.nsi"
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/build-win-x64-git-bash.sh [--runtime-source translated|upstream]
+
+This script packages the already-staged payload under packaging/windows/payload.
+EOF
+}
+
 run() {
   echo "+ $*"
   if [[ "${DRY_RUN}" != "1" ]]; then
     "$@"
   fi
+}
+
+normalize_runtime_source() {
+  local raw="$1"
+  case "${raw}" in
+    translated|zh|chinese)
+      printf 'translated\n'
+      ;;
+    upstream|native|official)
+      printf 'upstream\n'
+      ;;
+    *)
+      echo "unsupported runtime source: ${raw}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+configure_runtime_source() {
+  case "${OPENCLAW_RUNTIME_SOURCE}" in
+    translated)
+      OPENCLAW_RUNTIME_PACKAGE="@qingchencloud/openclaw-zh"
+      OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClawChineseTranslation"
+      OPENCLAW_RUNTIME_REPO_OWNER="1186258278"
+      OPENCLAW_RUNTIME_REPO_NAME="OpenClawChineseTranslation"
+      ;;
+    upstream)
+      OPENCLAW_RUNTIME_PACKAGE="openclaw"
+      OPENCLAW_RUNTIME_DISPLAY_NAME="OpenClaw"
+      OPENCLAW_RUNTIME_REPO_OWNER="openclaw"
+      OPENCLAW_RUNTIME_REPO_NAME="openclaw"
+      ;;
+    *)
+      echo "runtime source not configured: ${OPENCLAW_RUNTIME_SOURCE}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --runtime-source)
+        if [[ $# -lt 2 ]]; then
+          echo "--runtime-source requires a value" >&2
+          exit 1
+        fi
+        OPENCLAW_RUNTIME_SOURCE="$(normalize_runtime_source "$2")"
+        shift 2
+        ;;
+      --runtime-source=*)
+        OPENCLAW_RUNTIME_SOURCE="$(normalize_runtime_source "${1#*=}")"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "unknown argument: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
 }
 
 ensure_git_bash() {
@@ -43,8 +125,99 @@ to_windows_path() {
   fi
 }
 
+resolve_payload_runtime_metadata() {
+  local package_json="${APP_PAYLOAD_DIR}/openclaw/package.json"
+
+  if [[ ! -f "${package_json}" ]]; then
+    echo "missing payload package metadata: ${package_json}" >&2
+    exit 1
+  fi
+
+  mapfile -t payload_meta < <(python3 - "${package_json}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+print(str(data.get("name", "")).strip())
+print(str(data.get("version", "")).strip())
+PY
+)
+
+  local payload_name="${payload_meta[0]}"
+  local payload_version="${payload_meta[1]}"
+
+  if [[ -z "${payload_name}" || -z "${payload_version}" ]]; then
+    echo "payload package metadata is incomplete: ${package_json}" >&2
+    exit 1
+  fi
+
+  if [[ "${payload_name}" != "${OPENCLAW_RUNTIME_PACKAGE}" ]]; then
+    echo "staged payload package ${payload_name} does not match selected runtime source ${OPENCLAW_RUNTIME_SOURCE} (${OPENCLAW_RUNTIME_PACKAGE})" >&2
+    exit 1
+  fi
+
+  OPENCLAW_RUNTIME_VERSION="${payload_version}"
+  OPENCLAW_RUNTIME_RELEASE_TAG="v${payload_version}"
+  OPENCLAW_RUNTIME_RELEASE_URL="https://github.com/${OPENCLAW_RUNTIME_REPO_OWNER}/${OPENCLAW_RUNTIME_REPO_NAME}/releases/tag/${OPENCLAW_RUNTIME_RELEASE_TAG}"
+}
+
+generate_manifest() {
+  python3 - \
+    "${ROOT_DIR}/manifest.json" \
+    "${GENERATED_MANIFEST_PATH}" \
+    "${OPENCLAW_RUNTIME_SOURCE}" \
+    "${OPENCLAW_RUNTIME_PACKAGE}" \
+    "${OPENCLAW_RUNTIME_VERSION}" \
+    "${OPENCLAW_RUNTIME_RELEASE_TAG}" \
+    "${OPENCLAW_RUNTIME_RELEASE_URL}" \
+    "${OPENCLAW_RUNTIME_DISPLAY_NAME}" <<'PY'
+import json
+import sys
+
+(
+    template_path,
+    output_path,
+    runtime_source,
+    runtime_package,
+    runtime_version,
+    runtime_release_tag,
+    runtime_release_url,
+    runtime_display_name,
+) = sys.argv[1:9]
+
+with open(template_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+installer_version = str(data.get("installer_version") or data.get("version") or "0.1.0")
+node_version = str(data.get("node_version") or "")
+entries = data.get("entries") or []
+
+result = dict(data)
+result["version"] = installer_version
+result["installer_version"] = installer_version
+result["node_version"] = node_version
+result["runtime_source"] = runtime_source
+result["runtime_package"] = runtime_package
+result["runtime_version"] = runtime_version
+result["runtime_release_tag"] = runtime_release_tag
+result["runtime_release_url"] = runtime_release_url
+display_version = f"{runtime_display_name} v{runtime_version}".strip() if runtime_version else runtime_display_name
+result["runtime_display_name"] = runtime_display_name
+result["runtime_display_version"] = display_version
+result["entries"] = entries
+
+with open(output_path, 'w', encoding='utf-8') as handle:
+    json.dump(result, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
 main() {
+  parse_args "$@"
   ensure_git_bash
+  configure_runtime_source
 
   mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data" "${DIST_DIR}"
   if [[ "${DRY_RUN}" != "1" ]]; then
@@ -71,8 +244,10 @@ main() {
   fi
 
   echo "[2/4] stage payload"
+  resolve_payload_runtime_metadata
+  generate_manifest
   run cp "${LAUNCHER_SRC}" "${STAGE_DIR}/${LAUNCHER_NAME}"
-  run cp "${ROOT_DIR}/manifest.json" "${STAGE_DIR}/manifest.json"
+  run cp "${GENERATED_MANIFEST_PATH}" "${STAGE_DIR}/manifest.json"
   run cp -R "${APP_PAYLOAD_DIR}/." "${STAGE_DIR}/app/"
   run cp -R "${DATA_PAYLOAD_DIR}/." "${STAGE_DIR}/data/"
 
