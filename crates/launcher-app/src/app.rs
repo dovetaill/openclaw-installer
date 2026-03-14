@@ -46,10 +46,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     launcher.borrow().status(),
                     process_supervisor::supervisor::SupervisorStatus::Ready
                 ) {
+                    let install_root = launcher.borrow().install_root();
                     let _ = apply_result_to_state(
                         &ui,
                         &state,
-                        browser::open_local_url(&local_web_url(&current_port)),
+                        browser::open_dashboard(&install_root, &current_port),
                     );
                     return;
                 }
@@ -71,10 +72,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                                 let ready = state.get().next(LauncherEvent::Ready);
                                 state.set(ready);
                                 sync_state_text(&ui, ready);
+                                let install_root = launcher.borrow().install_root();
                                 let _ = apply_result_to_state(
                                     &ui,
                                     &state,
-                                    browser::open_local_url(&local_web_url(&port.to_string())),
+                                    browser::open_dashboard(&install_root, &port.to_string()),
                                 );
                             }
                             Err(_) => {
@@ -178,10 +180,6 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
 fn sync_state_text(ui: &MainWindow, state: LauncherState) {
     ui.set_state_text(SharedString::from(state.label()));
-}
-
-fn local_web_url(port: &str) -> String {
-    format!("http://127.0.0.1:{port}")
 }
 
 fn apply_result_to_state(

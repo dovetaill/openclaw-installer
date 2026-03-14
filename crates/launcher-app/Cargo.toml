@@ -9,6 +9,8 @@ slint = "1.14"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 runtime-config = { path = "../runtime-config" }
 process-supervisor = { path = "../process-supervisor" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [build-dependencies]
 slint-build = "1.14"
