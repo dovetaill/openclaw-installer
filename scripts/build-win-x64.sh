@@ -9,12 +9,15 @@ DIST_DIR="${BUILD_DIR}/dist"
 DOWNLOAD_DIR="${BUILD_DIR}/downloads"
 WORK_DIR="${BUILD_DIR}/work"
 XWIN_CACHE_DIR="${BUILD_DIR}/xwin-cache"
+NPM_CACHE_DIR="${BUILD_DIR}/npm-cache"
 LAUNCHER_NAME="OpenClaw Launcher.exe"
 DRY_RUN="${DRY_RUN:-0}"
 DEFAULT_NPMRC_CONTENTS="registry=https://registry.npmmirror.com/"
 OPENCLAW_NPM_REGISTRY="${OPENCLAW_NPM_REGISTRY:-https://registry.npmmirror.com}"
 NODE_INDEX_URL="${NODE_INDEX_URL:-https://nodejs.org/dist/index.json}"
 NODE_DIST_BASE_URL="${NODE_DIST_BASE_URL:-https://nodejs.org/dist}"
+OPENCLAW_TARGET_OS="${OPENCLAW_TARGET_OS:-win32}"
+OPENCLAW_TARGET_CPU="${OPENCLAW_TARGET_CPU:-x64}"
 OPENCLAW_NODE_ENGINE=""
 
 LAUNCHER_SRC="${ROOT_DIR}/target/${TARGET_TRIPLE}/release/launcher-app.exe"
@@ -139,7 +142,9 @@ prepare_openclaw_payload() {
   local metadata_path="${DOWNLOAD_DIR}/openclaw-npm.json"
   local openclaw_tarball="${DOWNLOAD_DIR}/openclaw.tgz"
   local extract_root="${WORK_DIR}/openclaw"
+  local install_root="${WORK_DIR}/openclaw-install"
   local package_root="${extract_root}/package"
+  local dependencies_root="${install_root}/node_modules"
   local tarball_url
   local version
 
@@ -168,12 +173,21 @@ prepare_openclaw_payload() {
   require_downloaded_path "${package_root}/extensions"
   require_downloaded_path "${package_root}/skills"
 
+  hydrate_openclaw_dependencies "${openclaw_tarball}" "${install_root}"
+
   run cp "${package_root}/openclaw.mjs" "${APP_OPENCLAW_DIR}/openclaw.mjs"
   run cp "${package_root}/package.json" "${APP_OPENCLAW_DIR}/package.json"
   run cp -R "${package_root}/dist" "${APP_OPENCLAW_DIR}/dist"
   run cp -R "${package_root}/assets" "${APP_OPENCLAW_DIR}/assets"
   run cp -R "${package_root}/extensions" "${APP_OPENCLAW_DIR}/extensions"
   run cp -R "${package_root}/skills" "${APP_OPENCLAW_DIR}/skills"
+
+  if [[ -d "${dependencies_root}/openclaw" ]]; then
+    run rm -rf "${dependencies_root}/openclaw"
+  fi
+
+  require_downloaded_path "${dependencies_root}"
+  run cp -R "${dependencies_root}" "${APP_OPENCLAW_DIR}/node_modules"
 }
 
 prepare_node_payload() {
@@ -219,6 +233,7 @@ prepare_runtime_payload() {
   if [[ "${DRY_RUN}" == "1" ]]; then
     echo "+ curl latest openclaw npm metadata from ${OPENCLAW_NPM_REGISTRY%/}/openclaw"
     echo "+ download latest openclaw npm tarball"
+    echo "+ install openclaw production dependencies for ${OPENCLAW_TARGET_OS}/${OPENCLAW_TARGET_CPU}"
     echo "+ download latest matching Windows Node x64 LTS zip from ${NODE_DIST_BASE_URL}"
     echo "+ refresh payload/app/openclaw and payload/app/node"
     return 0
@@ -226,6 +241,40 @@ prepare_runtime_payload() {
 
   prepare_openclaw_payload
   prepare_node_payload "${OPENCLAW_NODE_ENGINE}"
+}
+
+ensure_npm() {
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    return 0
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "npm not found; install a host Node.js + npm runtime to vendor OpenClaw dependencies" >&2
+  exit 1
+}
+
+hydrate_openclaw_dependencies() {
+  local openclaw_tarball="$1"
+  local install_root="$2"
+
+  ensure_npm
+  run rm -rf "${install_root}"
+  run mkdir -p "${install_root}"
+  run env \
+    NPM_CONFIG_CACHE="${NPM_CACHE_DIR}" \
+    NPM_CONFIG_REGISTRY="${OPENCLAW_NPM_REGISTRY}" \
+    npm install \
+    --omit=dev \
+    --no-package-lock \
+    --no-audit \
+    --no-fund \
+    --os="${OPENCLAW_TARGET_OS}" \
+    --cpu="${OPENCLAW_TARGET_CPU}" \
+    --prefix "${install_root}" \
+    "${openclaw_tarball}"
 }
 
 ensure_cargo_xwin() {
@@ -301,7 +350,7 @@ verify_payload() {
 }
 
 main() {
-  mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data" "${DIST_DIR}" "${DOWNLOAD_DIR}" "${WORK_DIR}" "${XWIN_CACHE_DIR}"
+  mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data" "${DIST_DIR}" "${DOWNLOAD_DIR}" "${WORK_DIR}" "${XWIN_CACHE_DIR}" "${NPM_CACHE_DIR}"
   if [[ "${DRY_RUN}" != "1" ]]; then
     rm -rf "${STAGE_DIR}/app" "${STAGE_DIR}/data"
     mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data"

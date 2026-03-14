@@ -23,12 +23,13 @@ pub fn diagnostics_commands(install_root: &str) -> Vec<String> {
 }
 
 pub fn open_log_dir(install_root: &str) -> Result<(), String> {
-    open_target(&format!(r"{}\data\logs", normalize_install_root(install_root)))
+    let target = PathBuf::from(format!(r"{}\data\logs", normalize_install_root(install_root)));
+    open_target(&ensure_directory_target(&target)?)
 }
 
 pub fn open_config_dir(install_root: &str) -> Result<(), String> {
     let layout = install_layout(install_root);
-    open_target(&layout.config_dir().to_string_lossy())
+    open_target(&ensure_directory_target(&layout.config_dir())?)
 }
 
 pub fn validate_config(install_root: &str) -> Result<(), String> {
@@ -96,4 +97,11 @@ fn windows_child(base: &std::path::Path, leaf: &str) -> PathBuf {
 
 fn quote(path: &std::path::Path) -> String {
     format!("\"{}\"", path.to_string_lossy())
+}
+
+pub fn ensure_directory_target(path: &std::path::Path) -> Result<String, String> {
+    std::fs::create_dir_all(path)
+        .map_err(|error| format!("failed to prepare directory target {}: {error}", path.to_string_lossy()))?;
+
+    Ok(path.to_string_lossy().into_owned())
 }

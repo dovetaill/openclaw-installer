@@ -45,7 +45,8 @@ printf 'launcher-binary\n' > "${MOCK_ROOT}/target/x86_64-pc-windows-msvc/release
 printf 'nsis\n' > "${MOCK_ROOT}/packaging/windows/openclaw-installer.nsi"
 
 mkdir -p "${FIXTURE_DIR}/openclaw/package/dist" "${FIXTURE_DIR}/openclaw/package/assets" "${FIXTURE_DIR}/openclaw/package/extensions" "${FIXTURE_DIR}/openclaw/package/skills/demo"
-printf '{"name":"openclaw","version":"2026.3.12","engines":{"node":">=22.16.0"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
+printf '{"name":"openclaw","version":"2026.3.12","engines":{"node":">=22.16.0"},"dependencies":{"chalk":"^5.6.2"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
+printf 'export const entry = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/entry.js"
 printf 'export const boot = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/index.js"
 printf 'asset\n' > "${FIXTURE_DIR}/openclaw/package/assets/icon.txt"
 printf 'extension\n' > "${FIXTURE_DIR}/openclaw/package/extensions/example.txt"
@@ -140,6 +141,35 @@ echo "unexpected cargo invocation: $*" >&2
 exit 1
 EOF
 chmod +x "${MOCK_BIN}/cargo"
+
+cat > "${MOCK_BIN}/npm" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+prefix=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix)
+      prefix="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "${prefix}" ]]; then
+  echo "mock npm requires --prefix" >&2
+  exit 1
+fi
+
+mkdir -p "${prefix}/node_modules/chalk"
+printf '{"name":"chalk","version":"5.6.2"}\n' > "${prefix}/node_modules/chalk/package.json"
+exit 0
+EOF
+chmod +x "${MOCK_BIN}/npm"
 
 cat > "${MOCK_BIN}/apt-get" <<'EOF'
 #!/usr/bin/env bash

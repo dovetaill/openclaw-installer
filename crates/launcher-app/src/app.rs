@@ -7,14 +7,26 @@ use slint::{ComponentHandle, SharedString};
 
 use crate::browser;
 use crate::diagnostics;
+use crate::install_root;
+use crate::launch_flow;
 use crate::launcher::LauncherController;
 use crate::state::{LauncherEvent, LauncherState};
 
 slint::include_modules!();
 
+impl launch_flow::LaunchSequence for LauncherController {
+    fn preflight(&mut self) -> Result<u16, String> {
+        LauncherController::preflight(self)
+    }
+
+    fn start(&mut self) -> Result<u16, String> {
+        LauncherController::start(self)
+    }
+}
+
 pub fn run() -> Result<(), Box<dyn Error>> {
     let ui = MainWindow::new()?;
-    let layout = InstallLayout::new("D:\\OpenClaw".into());
+    let layout = InstallLayout::new(install_root::resolve_install_root()?);
     let launcher = Rc::new(RefCell::new(LauncherController::new(layout)?));
     let state = Rc::new(Cell::new(LauncherState::Idle));
 
@@ -46,14 +58,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 state.set(preflight);
                 sync_state_text(&ui, preflight);
 
-                match launcher.borrow_mut().preflight() {
+                match launch_flow::run_preflight(&launcher) {
                     Ok(port) => {
                         ui.set_port(SharedString::from(port.to_string()));
                         let starting = state.get().next(LauncherEvent::PreflightPassed);
                         state.set(starting);
                         sync_state_text(&ui, starting);
 
-                        match launcher.borrow_mut().start() {
+                        match launch_flow::run_start(&launcher) {
                             Ok(port) => {
                                 ui.set_port(SharedString::from(port.to_string()));
                                 let ready = state.get().next(LauncherEvent::Ready);

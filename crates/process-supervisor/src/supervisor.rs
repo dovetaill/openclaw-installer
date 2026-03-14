@@ -29,6 +29,16 @@ pub struct ProcessSupervisor {
     stderr_lines: Arc<Mutex<Vec<String>>>,
 }
 
+pub fn openclaw_gateway_args(port: u16) -> Vec<String> {
+    vec![
+        "gateway".into(),
+        "run".into(),
+        "--allow-unconfigured".into(),
+        "--port".into(),
+        port.to_string(),
+    ]
+}
+
 impl Default for ProcessSupervisor {
     fn default() -> Self {
         Self::new()
@@ -73,8 +83,7 @@ impl ProcessSupervisor {
 
         let mut command = Command::new(&node_exe);
         command.arg(&openclaw_entry);
-        command.arg("--port");
-        command.arg(port.to_string());
+        command.args(openclaw_gateway_args(port));
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
