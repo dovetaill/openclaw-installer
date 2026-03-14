@@ -28,6 +28,11 @@ assert_not_contains() {
 assert_contains 'WriteReg(Str|ExpandStr)[[:space:]]+HKCU[[:space:]]+"(\$\{PRODUCT_UNINSTALL_KEY\}|Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OpenClaw)"'
 assert_contains 'CreateShortCut[[:space:]]+"(\$\{DESKTOP_SHORTCUT\}|\$DESKTOP\\OpenClaw Launcher\.lnk)"'
 assert_contains 'CreateShortCut[[:space:]]+"(\$\{START_MENU_SHORTCUT\}|\$SMPROGRAMS\\OpenClaw\\OpenClaw Launcher\.lnk)"'
+assert_contains 'BrandingText[[:space:]]+"kitlabs\.app © 制作"'
+assert_contains 'https://github\.com/kitlabs-app/openclaw-installer'
+assert_contains 'PRODUCT_RUNTIME_VERSION'
+assert_contains 'PRODUCT_RUNTIME_DISPLAY_VERSION'
+assert_contains 'WriteRegStr[[:space:]]+HKCU[[:space:]]+"\$\{PRODUCT_UNINSTALL_KEY\}"[[:space:]]+"Publisher"[[:space:]]+"\$\{PRODUCT_PUBLISHER\}"'
 
 assert_not_contains 'WriteReg(Expand)?Str[[:space:]]+HK(LM|CU)[[:space:]]+".*Environment.*PATH"'
 assert_not_contains 'EnVar::'

@@ -17,6 +17,7 @@ OPENCLAW_RUNTIME_VERSION=""
 OPENCLAW_RUNTIME_RELEASE_TAG=""
 OPENCLAW_RUNTIME_RELEASE_URL=""
 GENERATED_MANIFEST_PATH="${BUILD_DIR}/manifest.generated.json"
+INSTALLER_REPOSITORY_URL="https://github.com/kitlabs-app/openclaw-installer"
 
 LAUNCHER_SRC="${ROOT_DIR}/target/${TARGET_TRIPLE}/release/launcher-app.exe"
 APP_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/app"
@@ -261,6 +262,9 @@ main() {
 
   run makensis \
     -DPRODUCT_VERSION=0.1.0 \
+    -DPRODUCT_RUNTIME_VERSION="${OPENCLAW_RUNTIME_VERSION}" \
+    -DPRODUCT_RUNTIME_DISPLAY_VERSION="${OPENCLAW_RUNTIME_DISPLAY_NAME} v${OPENCLAW_RUNTIME_VERSION}" \
+    -DINSTALLER_REPOSITORY_URL="${INSTALLER_REPOSITORY_URL}" \
     -DSTAGE_DIR="${stage_dir_win}" \
     -X"OutFile ${dist_dir_win}/OpenClaw-Setup.exe" \
     "${nsis_script_win}"

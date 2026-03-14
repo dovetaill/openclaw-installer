@@ -21,8 +21,11 @@ InstallDir "$LOCALAPPDATA\OpenClaw"
 InstallDirRegKey HKCU "${PRODUCT_UNINSTALL_KEY}" "InstallLocation"
 ShowInstDetails show
 ShowUninstDetails show
+BrandingText "kitlabs.app © 制作"
 
 !define MUI_ABORTWARNING
+!define MUI_WELCOMEPAGE_TITLE "欢迎使用 ${PRODUCT_NAME} 安装程序"
+!define MUI_WELCOMEPAGE_TEXT "这将为当前用户安装 ${PRODUCT_NAME}。$\r$\n$\r$\n内置运行时: ${PRODUCT_RUNTIME_DISPLAY_VERSION}$\r$\n安装器项目: ${INSTALLER_REPOSITORY_URL}"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
