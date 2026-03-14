@@ -1,8 +1,12 @@
 import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
 
 export component MainWindow inherits Window {
+    in-out property <string> window_title_text: "OpenClaw Launcher";
+    in-out property <string> heading_text: "OpenClaw Launcher";
     in-out property <string> state_text: "Idle";
+    in-out property <string> runtime_label: "Runtime: unknown";
     in-out property <string> install_root: "";
+    in-out property <string> installer_repo_url: "";
     in-out property <string> port: "";
 
     callback open_web_ui;
@@ -10,23 +14,26 @@ export component MainWindow inherits Window {
     callback open_config_dir;
     callback validate_config;
     callback check_skills;
+    callback open_installer_repo;
     callback exit_app;
 
-    title: "OpenClaw Launcher";
+    title: root.window_title_text;
     width: 620px;
-    height: 340px;
+    height: 380px;
 
     VerticalBox {
         spacing: 10px;
 
         Text {
-            text: "OpenClaw Launcher";
+            text: root.heading_text;
             font-size: 24px;
         }
 
+        Text { text: root.runtime_label; }
         Text { text: "State: " + root.state_text; }
         Text { text: "Install Root: " + root.install_root; }
         Text { text: "Port: " + root.port; }
+        Text { text: "Installer: " + root.installer_repo_url; }
 
         HorizontalBox {
             spacing: 8px;
@@ -63,6 +70,11 @@ export component MainWindow inherits Window {
             Button {
                 text: "检查 skills";
                 clicked => { root.check_skills(); }
+            }
+
+            Button {
+                text: "安装器项目页";
+                clicked => { root.open_installer_repo(); }
             }
         }
     }

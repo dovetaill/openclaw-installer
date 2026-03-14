@@ -3,9 +3,15 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+const INSTALLER_REPOSITORY_URL: &str = "https://github.com/kitlabs-app/openclaw-installer";
+
 pub fn open_dashboard(install_root: &str, port: &str) -> Result<(), String> {
     let url = dashboard_url(install_root, port)?;
     open_local_url(&url)
+}
+
+pub fn open_installer_repository() -> Result<(), String> {
+    open_target(INSTALLER_REPOSITORY_URL)
 }
 
 pub fn dashboard_url(install_root: &str, port: &str) -> Result<String, String> {

@@ -3,6 +3,7 @@ use std::error::Error;
 use std::rc::Rc;
 
 use runtime_config::layout::InstallLayout;
+use runtime_config::manifest::PayloadManifest;
 use slint::{ComponentHandle, SharedString};
 
 use crate::browser;
@@ -10,6 +11,7 @@ use crate::diagnostics;
 use crate::install_root;
 use crate::launch_flow;
 use crate::launcher::LauncherController;
+use crate::metadata;
 use crate::state::{LauncherEvent, LauncherState};
 
 slint::include_modules!();
@@ -27,11 +29,24 @@ impl launch_flow::LaunchSequence for LauncherController {
 pub fn run() -> Result<(), Box<dyn Error>> {
     let ui = MainWindow::new()?;
     let layout = InstallLayout::new(install_root::resolve_install_root()?);
+    let manifest = PayloadManifest::from_install_root(layout.root()).ok();
     let launcher = Rc::new(RefCell::new(LauncherController::new(layout)?));
     let state = Rc::new(Cell::new(LauncherState::Idle));
 
     ui.set_install_root(SharedString::from(launcher.borrow().install_root()));
     ui.set_port(SharedString::from("18789"));
+    ui.set_window_title_text(SharedString::from(metadata::window_title(
+        manifest.as_ref(),
+    )));
+    ui.set_heading_text(SharedString::from(metadata::heading_text(
+        manifest.as_ref(),
+    )));
+    ui.set_runtime_label(SharedString::from(metadata::runtime_label(
+        manifest.as_ref(),
+    )));
+    ui.set_installer_repo_url(SharedString::from(
+        metadata::installer_repository_url(),
+    ));
     sync_state_text(&ui, state.get());
 
     {
@@ -92,6 +107,20 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                         sync_state_text(&ui, error);
                     }
                 }
+            }
+        });
+    }
+
+    {
+        let state = state.clone();
+        let ui_weak = ui.as_weak();
+        ui.on_open_installer_repo(move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                let _ = apply_result_to_state(
+                    &ui,
+                    &state,
+                    browser::open_installer_repository(),
+                );
             }
         });
     }

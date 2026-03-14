@@ -4,6 +4,7 @@ mod diagnostics;
 mod install_root;
 mod launch_flow;
 mod launcher;
+mod metadata;
 mod state;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
