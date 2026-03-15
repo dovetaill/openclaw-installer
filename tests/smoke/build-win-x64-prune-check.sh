@@ -28,6 +28,8 @@ MOCK_ROOT="${TMP_DIR}/workspace"
 MOCK_BIN="${TMP_DIR}/bin"
 FIXTURE_DIR="${TMP_DIR}/fixtures"
 LOG_FILE="${TMP_DIR}/build.log"
+INSTALL_MARKER="${TMP_DIR}/cargo-xwin-installed"
+EXPECTED_XWIN_CACHE_DIR="${MOCK_ROOT}/.build/windows-x64/xwin-cache"
 OPENCLAW_REGISTRY_URL="https://mirror.example/npm"
 OPENCLAW_PACKAGE="@qingchencloud/openclaw-zh"
 OPENCLAW_META_URL="${OPENCLAW_REGISTRY_URL}/${OPENCLAW_PACKAGE}"
@@ -53,19 +55,38 @@ printf '{ "version": "0.1.0" }\n' > "${MOCK_ROOT}/manifest.json"
 printf 'launcher-binary\n' > "${MOCK_ROOT}/target/x86_64-pc-windows-msvc/release/launcher-app.exe"
 printf 'nsis\n' > "${MOCK_ROOT}/packaging/windows/openclaw-installer.nsi"
 
-mkdir -p "${FIXTURE_DIR}/openclaw/package/dist" "${FIXTURE_DIR}/openclaw/package/assets" "${FIXTURE_DIR}/openclaw/package/extensions" "${FIXTURE_DIR}/openclaw/package/skills/demo"
+mkdir -p \
+  "${FIXTURE_DIR}/openclaw/package/dist" \
+  "${FIXTURE_DIR}/openclaw/package/assets" \
+  "${FIXTURE_DIR}/openclaw/package/docs/start" \
+  "${FIXTURE_DIR}/openclaw/package/docs/reference/templates" \
+  "${FIXTURE_DIR}/openclaw/package/extensions" \
+  "${FIXTURE_DIR}/openclaw/package/skills/demo"
+cat > "${FIXTURE_DIR}/openclaw/package/openclaw.mjs" <<'EOF'
+#!/usr/bin/env node
+if (process.argv.includes('--help')) {
+  console.log('openclaw help')
+}
+EOF
 printf '{"name":"@qingchencloud/openclaw-zh","version":"2026.3.12-zh.2","engines":{"node":">=22.16.0"},"dependencies":{"chalk":"^5.6.2"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
 printf 'export const entry = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/entry.js"
 printf 'export const boot = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/index.js"
 printf 'asset\n' > "${FIXTURE_DIR}/openclaw/package/assets/icon.txt"
+printf '# getting started\n' > "${FIXTURE_DIR}/openclaw/package/docs/start/getting-started.md"
+printf '# template\n' > "${FIXTURE_DIR}/openclaw/package/docs/reference/templates/AGENTS.md"
 printf 'extension\n' > "${FIXTURE_DIR}/openclaw/package/extensions/example.txt"
 printf '# demo skill\n' > "${FIXTURE_DIR}/openclaw/package/skills/demo/SKILL.md"
 tar -czf "${FIXTURE_DIR}/openclaw.tgz" -C "${FIXTURE_DIR}/openclaw" package
 
-mkdir -p "${FIXTURE_DIR}/node/node-v24.14.0-win-x64"
+mkdir -p "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/docs"
+mkdir -p "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/man"
+mkdir -p "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/tap-snapshots"
 printf 'node-binary\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node.exe"
 printf 'npm shim\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/npm.cmd"
 printf 'npx shim\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/npx.cmd"
+printf 'docs\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/docs/readme.md"
+printf 'man\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/man/npm.1"
+printf 'snapshot\n' > "${FIXTURE_DIR}/node/node-v24.14.0-win-x64/node_modules/npm/tap-snapshots/test.txt"
 (cd "${FIXTURE_DIR}/node" && zip -qr "${FIXTURE_DIR}/node.zip" node-v24.14.0-win-x64)
 
 cat > "${FIXTURE_DIR}/openclaw-npm.json" <<EOF
@@ -144,17 +165,39 @@ cp "\${src}" "\${output}"
 EOF
 chmod +x "${MOCK_BIN}/curl"
 
-cat > "${MOCK_BIN}/cargo" <<'EOF'
+cat > "${MOCK_BIN}/cargo" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${1:-}" == "xwin" && "${2:-}" == "--version" ]]; then
-  echo "cargo-xwin 0.0.0"
+
+marker="${INSTALL_MARKER}"
+
+if [[ "\${1:-}" == "xwin" && "\${2:-}" == "--version" ]]; then
+  if [[ -f "\${marker}" ]]; then
+    echo "cargo-xwin 0.0.0"
+    exit 0
+  fi
+  echo "error: no such command: xwin" >&2
+  exit 101
+fi
+
+if [[ "\${1:-}" == "install" && "\${2:-}" == "cargo-xwin" ]]; then
+  touch "\${marker}"
   exit 0
 fi
-if [[ "${1:-}" == "xwin" && "${2:-}" == "build" ]]; then
-  exit 0
+
+if [[ "\${1:-}" == "xwin" && "\${2:-}" == "build" ]]; then
+  if [[ "\${XWIN_CACHE_DIR:-}" != "${EXPECTED_XWIN_CACHE_DIR}" ]]; then
+    echo "unexpected XWIN_CACHE_DIR: \${XWIN_CACHE_DIR:-unset}" >&2
+    exit 1
+  fi
+  if [[ -f "\${marker}" ]]; then
+    exit 0
+  fi
+  echo "error: no such command: xwin" >&2
+  exit 101
 fi
-echo "unexpected cargo invocation: $*" >&2
+
+echo "unexpected cargo invocation: \$*" >&2
 exit 1
 EOF
 chmod +x "${MOCK_BIN}/cargo"
@@ -182,8 +225,20 @@ if [[ -z "${prefix}" ]]; then
   exit 1
 fi
 
-mkdir -p "${prefix}/node_modules/chalk"
+mkdir -p "${prefix}/node_modules/chalk/docs"
+mkdir -p "${prefix}/node_modules/chalk/dist/doc"
+mkdir -p "${prefix}/node_modules/chalk/tests"
+mkdir -p "${prefix}/node_modules/chalk/examples"
+mkdir -p "${prefix}/node_modules/chalk/.github"
 printf '{"name":"chalk","version":"5.6.2"}\n' > "${prefix}/node_modules/chalk/package.json"
+printf 'export {};\n' > "${prefix}/node_modules/chalk/index.d.ts"
+printf '{}\n' > "${prefix}/node_modules/chalk/index.js.map"
+printf '# readme\n' > "${prefix}/node_modules/chalk/README.md"
+printf 'docs\n' > "${prefix}/node_modules/chalk/docs/guide.md"
+printf 'runtime\n' > "${prefix}/node_modules/chalk/dist/doc/runtime.js"
+printf 'tests\n' > "${prefix}/node_modules/chalk/tests/chalk.test.js"
+printf 'example\n' > "${prefix}/node_modules/chalk/examples/demo.js"
+printf 'ci\n' > "${prefix}/node_modules/chalk/.github/workflow.yml"
 exit 0
 EOF
 chmod +x "${MOCK_BIN}/npm"
@@ -191,7 +246,7 @@ chmod +x "${MOCK_BIN}/npm"
 cat > "${MOCK_BIN}/apt-get" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-echo "apt-get should not run when payload validation fails first" >&2
+echo "apt-get should not be required in prune smoke checks" >&2
 exit 1
 EOF
 chmod +x "${MOCK_BIN}/apt-get"
@@ -199,36 +254,86 @@ chmod +x "${MOCK_BIN}/apt-get"
 cat > "${MOCK_BIN}/makensis" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-echo "makensis should not run when payload validation fails first" >&2
-exit 1
+exit 0
 EOF
 chmod +x "${MOCK_BIN}/makensis"
 
-set +e
-PATH="${MOCK_BIN}:${PATH}" \
+if PATH="${MOCK_BIN}:${PATH}" \
   OPENCLAW_NPM_REGISTRY="${OPENCLAW_REGISTRY_URL}" \
   NODE_INDEX_URL="${NODE_INDEX_URL}" \
   NODE_DIST_BASE_URL="${NODE_DIST_BASE_URL}" \
-  bash "${MOCK_ROOT}/scripts/build-win-x64.sh" >"${LOG_FILE}" 2>&1
-status=$?
-set -e
-
-if [[ "${status}" -eq 0 ]]; then
-  echo "expected build script to fail when app payload is incomplete" >&2
+  bash "${MOCK_ROOT}/scripts/build-win-x64.sh" >"${LOG_FILE}" 2>&1; then
+  :
+else
   cat "${LOG_FILE}" >&2
   exit 1
 fi
 
-grep -Fq 'downloaded payload missing required path:' "${LOG_FILE}" || {
-  echo "expected downloaded payload validation error before NSIS packaging" >&2
-  cat "${LOG_FILE}" >&2
-  exit 1
-}
+PAYLOAD_ROOT="${MOCK_ROOT}/packaging/windows/payload"
 
-grep -Fq '/package/openclaw.mjs' "${LOG_FILE}" || {
-  echo "expected missing OpenClaw entrypoint path in download validation error" >&2
-  cat "${LOG_FILE}" >&2
+if [[ -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/index.d.ts" ]]; then
+  echo "expected build script to prune TypeScript declaration files from vendored runtime dependencies" >&2
   exit 1
-}
+fi
 
-echo "Linux payload guard smoke check passed."
+if [[ -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/index.js.map" ]]; then
+  echo "expected build script to prune sourcemaps from vendored runtime dependencies" >&2
+  exit 1
+fi
+
+if [[ -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/README.md" ]]; then
+  echo "expected build script to prune markdown docs from vendored runtime dependencies" >&2
+  exit 1
+fi
+
+if [[ -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/docs/guide.md" ]]; then
+  echo "expected build script to prune markdown files inside vendored docs directories" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/dist/doc/runtime.js" ]]; then
+  echo "expected build script to preserve runtime JavaScript files inside doc directories" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/tests" ]]; then
+  echo "expected build script to prune tests directories from vendored runtime dependencies" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/examples" ]]; then
+  echo "expected build script to prune example directories from vendored runtime dependencies" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/.github" ]]; then
+  echo "expected build script to prune .github directories from vendored runtime dependencies" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PAYLOAD_ROOT}/app/openclaw/node_modules/chalk/package.json" ]]; then
+  echo "expected runtime dependency metadata to remain after pruning" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/node/node_modules/npm/docs" ]]; then
+  echo "expected build script to prune embedded npm docs from the bundled Node runtime" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/node/node_modules/npm/man" ]]; then
+  echo "expected build script to prune embedded npm manpages from the bundled Node runtime" >&2
+  exit 1
+fi
+
+if [[ -d "${PAYLOAD_ROOT}/app/node/node_modules/npm/tap-snapshots" ]]; then
+  echo "expected build script to prune embedded npm snapshots from the bundled Node runtime" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PAYLOAD_ROOT}/app/node/node.exe" ]]; then
+  echo "expected bundled node.exe to remain after pruning" >&2
+  exit 1
+fi
+
+echo "Windows payload prune smoke check passed."

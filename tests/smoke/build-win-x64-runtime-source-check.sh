@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_SCRIPT="${ROOT_DIR}/scripts/build-win-x64.sh"
 VERIFY_SCRIPT="${ROOT_DIR}/scripts/verify-payload.sh"
+PRUNE_SCRIPT="${ROOT_DIR}/scripts/prune-windows-payload.sh"
 
 if [[ ! -f "${SOURCE_SCRIPT}" ]]; then
   echo "missing source script: ${SOURCE_SCRIPT}" >&2
@@ -12,6 +13,11 @@ fi
 
 if [[ ! -f "${VERIFY_SCRIPT}" ]]; then
   echo "missing payload verifier: ${VERIFY_SCRIPT}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PRUNE_SCRIPT}" ]]; then
+  echo "missing payload pruner: ${PRUNE_SCRIPT}" >&2
   exit 1
 fi
 
@@ -36,6 +42,8 @@ create_package_fixture() {
   mkdir -p \
     "${fixture_root}/package/dist" \
     "${fixture_root}/package/assets" \
+    "${fixture_root}/package/docs/start" \
+    "${fixture_root}/package/docs/reference/templates" \
     "${fixture_root}/package/extensions" \
     "${fixture_root}/package/skills/demo"
 
@@ -53,6 +61,8 @@ EOF
   printf 'export const entry = true;\n' > "${fixture_root}/package/dist/entry.js"
   printf 'export const boot = true;\n' > "${fixture_root}/package/dist/index.js"
   printf 'asset\n' > "${fixture_root}/package/assets/icon.txt"
+  printf '# getting started\n' > "${fixture_root}/package/docs/start/getting-started.md"
+  printf '# template\n' > "${fixture_root}/package/docs/reference/templates/AGENTS.md"
   printf 'extension\n' > "${fixture_root}/package/extensions/example.txt"
   printf '# demo skill\n' > "${fixture_root}/package/skills/demo/SKILL.md"
 
@@ -89,7 +99,8 @@ run_case() {
 
   cp "${SOURCE_SCRIPT}" "${mock_root}/scripts/build-win-x64.sh"
   cp "${VERIFY_SCRIPT}" "${mock_root}/scripts/verify-payload.sh"
-  chmod +x "${mock_root}/scripts/build-win-x64.sh" "${mock_root}/scripts/verify-payload.sh"
+  cp "${PRUNE_SCRIPT}" "${mock_root}/scripts/prune-windows-payload.sh"
+  chmod +x "${mock_root}/scripts/build-win-x64.sh" "${mock_root}/scripts/verify-payload.sh" "${mock_root}/scripts/prune-windows-payload.sh"
 
   printf '{ "version": "0.1.0" }\n' > "${mock_root}/manifest.json"
   printf 'launcher-binary\n' > "${mock_root}/target/x86_64-pc-windows-msvc/release/launcher-app.exe"

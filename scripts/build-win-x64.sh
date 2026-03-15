@@ -39,6 +39,7 @@ DATA_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/data"
 DATA_CONFIG_DIR="${DATA_PAYLOAD_DIR}/config"
 NPMRC_PATH="${DATA_CONFIG_DIR}/npmrc"
 PAYLOAD_VERIFY_SCRIPT="${ROOT_DIR}/scripts/verify-payload.sh"
+PAYLOAD_PRUNE_SCRIPT="${ROOT_DIR}/scripts/prune-windows-payload.sh"
 
 usage() {
   cat <<'EOF'
@@ -294,6 +295,7 @@ prepare_openclaw_payload() {
   require_downloaded_path "${package_root}/package.json"
   require_downloaded_path "${package_root}/dist"
   require_downloaded_path "${package_root}/assets"
+  require_downloaded_path "${package_root}/docs"
   require_downloaded_path "${package_root}/extensions"
   require_downloaded_path "${package_root}/skills"
 
@@ -303,6 +305,7 @@ prepare_openclaw_payload() {
   run cp "${package_root}/package.json" "${APP_OPENCLAW_DIR}/package.json"
   run cp -R "${package_root}/dist" "${APP_OPENCLAW_DIR}/dist"
   run cp -R "${package_root}/assets" "${APP_OPENCLAW_DIR}/assets"
+  run cp -R "${package_root}/docs" "${APP_OPENCLAW_DIR}/docs"
   run cp -R "${package_root}/extensions" "${APP_OPENCLAW_DIR}/extensions"
   run cp -R "${package_root}/skills" "${APP_OPENCLAW_DIR}/skills"
 
@@ -526,6 +529,15 @@ verify_payload() {
   run bash "${PAYLOAD_VERIFY_SCRIPT}" "${ROOT_DIR}/packaging/windows/payload"
 }
 
+prune_payload() {
+  if [[ ! -x "${PAYLOAD_PRUNE_SCRIPT}" ]]; then
+    echo "missing executable payload pruner: ${PAYLOAD_PRUNE_SCRIPT}" >&2
+    exit 1
+  fi
+
+  run bash "${PAYLOAD_PRUNE_SCRIPT}" "${ROOT_DIR}/packaging/windows/payload"
+}
+
 main() {
   parse_args "$@"
   mkdir -p "${STAGE_DIR}/app" "${STAGE_DIR}/data" "${DIST_DIR}" "${DOWNLOAD_DIR}" "${WORK_DIR}" "${XWIN_CACHE_DIR}" "${NPM_CACHE_DIR}"
@@ -540,6 +552,7 @@ main() {
   ensure_cargo_xwin
   run env XWIN_CACHE_DIR="${XWIN_CACHE_DIR}" cargo xwin build --release --target "${TARGET_TRIPLE}" -p launcher-app
   ensure_data_payload_layout
+  prune_payload
   verify_payload
 
   if [[ "${DRY_RUN}" != "1" && ! -f "${LAUNCHER_SRC}" ]]; then

@@ -23,6 +23,7 @@ LAUNCHER_SRC="${ROOT_DIR}/target/${TARGET_TRIPLE}/release/launcher-app.exe"
 APP_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/app"
 DATA_PAYLOAD_DIR="${ROOT_DIR}/packaging/windows/payload/data"
 NSIS_SCRIPT="${ROOT_DIR}/packaging/windows/openclaw-installer.nsi"
+PAYLOAD_PRUNE_SCRIPT="${ROOT_DIR}/scripts/prune-windows-payload.sh"
 
 usage() {
   cat <<'EOF'
@@ -215,6 +216,15 @@ with open(output_path, 'w', encoding='utf-8') as handle:
 PY
 }
 
+prune_payload() {
+  if [[ ! -x "${PAYLOAD_PRUNE_SCRIPT}" ]]; then
+    echo "missing executable payload pruner: ${PAYLOAD_PRUNE_SCRIPT}" >&2
+    exit 1
+  fi
+
+  run bash "${PAYLOAD_PRUNE_SCRIPT}" "${ROOT_DIR}/packaging/windows/payload"
+}
+
 main() {
   parse_args "$@"
   ensure_git_bash
@@ -243,6 +253,8 @@ main() {
     echo "missing data payload directory: ${DATA_PAYLOAD_DIR}" >&2
     exit 1
   fi
+
+  prune_payload
 
   echo "[2/4] stage payload"
   resolve_payload_runtime_metadata

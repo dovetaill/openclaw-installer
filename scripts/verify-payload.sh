@@ -64,6 +64,9 @@ require_file "${PAYLOAD_ROOT}/app/node/node.exe"
 require_file "${PAYLOAD_ROOT}/app/openclaw/openclaw.mjs"
 require_file "${PAYLOAD_ROOT}/app/openclaw/package.json"
 require_file "${PAYLOAD_ROOT}/app/openclaw/dist/index.js"
+require_dir "${PAYLOAD_ROOT}/app/openclaw/docs"
+require_file "${PAYLOAD_ROOT}/app/openclaw/docs/start/getting-started.md"
+require_file "${PAYLOAD_ROOT}/app/openclaw/docs/reference/templates/AGENTS.md"
 require_one_of "openclaw entry" \
   "${PAYLOAD_ROOT}/app/openclaw/dist/entry.js" \
   "${PAYLOAD_ROOT}/app/openclaw/dist/entry.mjs"

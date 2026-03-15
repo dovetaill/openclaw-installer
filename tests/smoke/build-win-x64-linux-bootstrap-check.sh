@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SOURCE_SCRIPT="${ROOT_DIR}/scripts/build-win-x64.sh"
 VERIFY_SCRIPT="${ROOT_DIR}/scripts/verify-payload.sh"
+PRUNE_SCRIPT="${ROOT_DIR}/scripts/prune-windows-payload.sh"
 
 if [[ ! -f "${SOURCE_SCRIPT}" ]]; then
   echo "missing source script: ${SOURCE_SCRIPT}" >&2
@@ -12,6 +13,11 @@ fi
 
 if [[ ! -f "${VERIFY_SCRIPT}" ]]; then
   echo "missing payload verifier: ${VERIFY_SCRIPT}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PRUNE_SCRIPT}" ]]; then
+  echo "missing payload pruner: ${PRUNE_SCRIPT}" >&2
   exit 1
 fi
 
@@ -42,13 +48,20 @@ mkdir -p \
 
 cp "${SOURCE_SCRIPT}" "${MOCK_ROOT}/scripts/build-win-x64.sh"
 cp "${VERIFY_SCRIPT}" "${MOCK_ROOT}/scripts/verify-payload.sh"
-chmod +x "${MOCK_ROOT}/scripts/build-win-x64.sh" "${MOCK_ROOT}/scripts/verify-payload.sh"
+cp "${PRUNE_SCRIPT}" "${MOCK_ROOT}/scripts/prune-windows-payload.sh"
+chmod +x "${MOCK_ROOT}/scripts/build-win-x64.sh" "${MOCK_ROOT}/scripts/verify-payload.sh" "${MOCK_ROOT}/scripts/prune-windows-payload.sh"
 
 printf '{ "version": "0.1.0" }\n' > "${MOCK_ROOT}/manifest.json"
 printf 'launcher-binary\n' > "${MOCK_ROOT}/target/x86_64-pc-windows-msvc/release/launcher-app.exe"
 printf 'nsis\n' > "${MOCK_ROOT}/packaging/windows/openclaw-installer.nsi"
 
-mkdir -p "${FIXTURE_DIR}/openclaw/package/dist" "${FIXTURE_DIR}/openclaw/package/assets" "${FIXTURE_DIR}/openclaw/package/extensions" "${FIXTURE_DIR}/openclaw/package/skills/demo"
+mkdir -p \
+  "${FIXTURE_DIR}/openclaw/package/dist" \
+  "${FIXTURE_DIR}/openclaw/package/assets" \
+  "${FIXTURE_DIR}/openclaw/package/extensions" \
+  "${FIXTURE_DIR}/openclaw/package/skills/demo" \
+  "${FIXTURE_DIR}/openclaw/package/docs/start" \
+  "${FIXTURE_DIR}/openclaw/package/docs/reference/templates"
 printf '#!/usr/bin/env node\n' > "${FIXTURE_DIR}/openclaw/package/openclaw.mjs"
 printf '{"name":"@qingchencloud/openclaw-zh","version":"2026.3.12-zh.2","engines":{"node":">=22.16.0"},"dependencies":{"chalk":"^5.6.2"}}\n' > "${FIXTURE_DIR}/openclaw/package/package.json"
 printf 'export const entry = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/entry.js"
@@ -56,6 +69,8 @@ printf 'export const boot = true;\n' > "${FIXTURE_DIR}/openclaw/package/dist/ind
 printf 'asset\n' > "${FIXTURE_DIR}/openclaw/package/assets/icon.txt"
 printf 'extension\n' > "${FIXTURE_DIR}/openclaw/package/extensions/example.txt"
 printf '# demo skill\n' > "${FIXTURE_DIR}/openclaw/package/skills/demo/SKILL.md"
+printf '# getting started\n' > "${FIXTURE_DIR}/openclaw/package/docs/start/getting-started.md"
+printf '# template\n' > "${FIXTURE_DIR}/openclaw/package/docs/reference/templates/AGENTS.md"
 tar -czf "${FIXTURE_DIR}/openclaw.tgz" -C "${FIXTURE_DIR}/openclaw" package
 
 mkdir -p "${FIXTURE_DIR}/node/node-v24.14.0-win-x64"
@@ -298,6 +313,18 @@ grep -Fq '"runtime_source": "translated"' "${MOCK_ROOT}/.build/windows-x64/paylo
 
 if [[ ! -f "${MOCK_ROOT}/packaging/windows/payload/app/openclaw/dist/index.js" ]]; then
   echo "expected linux build script to stage OpenClaw dist assets from npm tarball" >&2
+  cat "${LOG_FILE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${MOCK_ROOT}/packaging/windows/payload/app/openclaw/docs/reference/templates/AGENTS.md" ]]; then
+  echo "expected linux build script to stage docs/reference/templates markdown files from npm tarball" >&2
+  cat "${LOG_FILE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${MOCK_ROOT}/packaging/windows/payload/app/openclaw/docs/start/getting-started.md" ]]; then
+  echo "expected linux build script to stage the full docs tree from the npm tarball" >&2
   cat "${LOG_FILE}" >&2
   exit 1
 fi
