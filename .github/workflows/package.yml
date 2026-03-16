@@ -1,0 +1,54 @@
+name: Package Windows Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_source:
+        description: OpenClaw runtime source
+        required: true
+        default: translated
+        type: choice
+        options:
+          - translated
+          - upstream
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build installer
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nsis zip unzip
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Windows installer
+        run: bash scripts/build-win-x64.sh --runtime-source "${{ inputs.runtime_source }}"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-installer-${{ inputs.runtime_source }}
+          path: .build/windows-x64/dist/OpenClaw-Setup.exe
+          if-no-files-found: error
+          retention-days: 14

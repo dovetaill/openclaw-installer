@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Rust and smoke checks
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep zip unzip
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run launcher smoke checks
+        run: bash scripts/smoke-launcher.sh
+
+      - name: Run NSIS script checks
+        run: bash tests/smoke/nsis-script-check.sh
+
+      - name: Run build bootstrap smoke checks
+        run: bash tests/smoke/build-win-x64-linux-bootstrap-check.sh
+
+      - name: Run runtime source smoke checks
+        run: bash tests/smoke/build-win-x64-runtime-source-check.sh
+
+      - name: Run payload guard smoke checks
+        run: bash tests/smoke/build-win-x64-payload-guard-check.sh
+
+      - name: Run payload pruning smoke checks
+        run: bash tests/smoke/build-win-x64-prune-check.sh
