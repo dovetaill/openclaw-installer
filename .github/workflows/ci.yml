@@ -18,12 +18,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install host dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ripgrep zip unzip
+          sudo apt-get install -y libfontconfig1-dev ripgrep zip unzip
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
