@@ -6,6 +6,7 @@
 - 确认 `OpenClaw Launcher.exe`、`manifest.json` 与 `uninstall.exe` 位于安装根目录。
 - 确认 `app\node\` 与 `app\openclaw\` 被视为可替换层。
 - 确认 `data\config\`、`data\workspace\`、`data\skills\`、`data\logs\` 被视为保留层。
+- 确认 `data\logs\launcher.log` 与 `data\logs\launcher-crash.log` 使用安装目录内的本地路径。
 
 ## env 重定向检查
 
@@ -27,6 +28,8 @@
 
 - “重新打开 Web UI” 在 Ready 后重开本地浏览器
 - “打开日志目录” 指向 `data\logs`
+- `launcher.log` 记录 launcher 启动与显式错误
+- `launcher-crash.log` 记录 panic / fatal crash 详情
 - “打开配置目录” 指向 `data\config`
 - “验证配置” 通过内置 `node.exe + openclaw.mjs config validate`
 - “检查 skills” 通过内置 `node.exe + openclaw.mjs skills check`

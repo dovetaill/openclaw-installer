@@ -2,7 +2,7 @@
 
 ## 背景
 
-`openclaw/openclaw` 当前是一个以 Node 为运行时的个人 AI assistant，官方文档对 Windows 的推荐路径仍偏向 `WSL2`。本方案的目标不是修改 OpenClaw 核心架构，而是在 **Debian 13** 开发环境中，为 **Windows 11 x64** 提供一个 **纯 Windows 原生、一键安装、目录自包含** 的离线安装方案。
+`openclaw/openclaw` 当前是一个以 Node 为运行时的个人 AI assistant，官方文档对 Windows 的推荐路径仍偏向 `WSL2`。本方案的目标不是修改 OpenClaw 核心架构，而是在 **Debian 13** 开发环境中，为 **Windows 10 x64 / Windows 11 x64** 提供一个 **纯 Windows 原生、一键安装、目录自包含** 的离线安装方案。
 
 本设计严格遵循以下已确认前提：
 
@@ -30,7 +30,7 @@
 
 本方案的目标如下：
 
-1. 为 Windows 11 用户提供一个可双击运行的 `Setup.exe`
+1. 为 Windows 10 x64 / Windows 11 x64 用户提供一个可双击运行的 `Setup.exe`
 2. 允许用户自由选择安装盘符和目录，不强制写入 `C:` 的固定位置
 3. 将 `Node runtime`、`OpenClaw payload`、配置、状态、日志、workspace、skills 全部收口到安装目录内部
 4. 安装完成后通过桌面图标启动 `Rust Launcher`，由 `Launcher` 托管 OpenClaw 网关进程
@@ -452,7 +452,7 @@ skills 相关配置保留 OpenClaw 官方结构：
 这是在以下约束下最平衡的方案：
 
 - 开发环境是 `Debian 13`
-- 目标环境是 `Windows 11`
+- 目标环境是 `Windows 10 x64` 与 `Windows 11 x64`
 - 需要中国大陆网络镜像
 - 需要绿色、自包含、可选盘符安装
 - 需要 Windows 原生安装体验

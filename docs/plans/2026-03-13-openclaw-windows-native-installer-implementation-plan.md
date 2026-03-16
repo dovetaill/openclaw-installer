@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 构建一个可在 Debian 13 上产出 Windows 11 x64 离线安装包的 OpenClaw 原生安装器项目，提供 `NSIS Setup.exe`、`Rust Launcher`、自包含 `Node + OpenClaw` 运行时，以及可验证的安装、启动、诊断与回滚链路。
+**Goal:** 构建一个可在 Debian 13 上产出 Windows 10 x64 / Windows 11 x64 离线安装包的 OpenClaw 原生安装器项目，提供 `NSIS Setup.exe`、`Rust Launcher`、自包含 `Node + OpenClaw` 运行时，以及可验证的安装、启动、诊断与回滚链路。
 
 **Architecture:** 项目采用 `app/data` 双层布局。`NSIS` 负责安装与卸载，`Rust + Slint + Tokio` 的 `Launcher` 负责路径重定向、OpenClaw 子进程托管、readiness 检测、浏览器引导与诊断入口。配置、workspace 与 skills 严格复用 OpenClaw 官方模型，通过 `OPENCLAW_HOME`、`OPENCLAW_STATE_DIR`、`OPENCLAW_CONFIG_PATH` 和 `NPM_CONFIG_USERCONFIG` 收口到安装目录。
 
@@ -832,4 +832,3 @@ git commit -m "docs: add verification chain and release runbook"
 - `docs/release/windows-installer.md`
 
 执行过程中若发现设计与现实约束冲突，先修订设计文档，再修订 implementation plan，然后再改代码。
-

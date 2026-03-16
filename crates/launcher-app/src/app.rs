@@ -12,6 +12,7 @@ use crate::browser;
 use crate::diagnostics;
 use crate::install_root;
 use crate::launcher::LauncherController;
+use crate::logging;
 use crate::metadata;
 use crate::state::{open_web_ui_action, LauncherEvent, LauncherState, OpenWebUiAction};
 
@@ -119,6 +120,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                                                     .next(LauncherEvent::StartFailed);
                                                 async_state.set(failed);
                                                 sync_state_text(&ui, failed);
+                                                let _ = logging::log_error(&format!(
+                                                    "launcher start failed: {error}"
+                                                ));
                                                 ui.set_detail_text(SharedString::from(error));
                                             }
                                         }
@@ -128,15 +132,19 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                                     let failed = state.get().next(LauncherEvent::StartFailed);
                                     state.set(failed);
                                     sync_state_text(&ui, failed);
-                                    ui.set_detail_text(SharedString::from(format!(
-                                        "failed to schedule launcher startup: {error}"
-                                    )));
+                                    let detail =
+                                        format!("failed to schedule launcher startup: {error}");
+                                    let _ = logging::log_error(&detail);
+                                    ui.set_detail_text(SharedString::from(detail));
                                 }
                             }
                             Err(error) => {
                                 let failed = state.get().next(LauncherEvent::StartFailed);
                                 state.set(failed);
                                 sync_state_text(&ui, failed);
+                                let _ = logging::log_error(&format!(
+                                    "launcher preflight failed: {error}"
+                                ));
                                 ui.set_detail_text(SharedString::from(error));
                             }
                         }
@@ -250,6 +258,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                             Err(error) => {
                                 async_state.set(LauncherState::Error);
                                 sync_state_text(&ui, LauncherState::Error);
+                                let _ = logging::log_error(&format!(
+                                    "launcher shutdown failed: {error}"
+                                ));
                                 ui.set_detail_text(SharedString::from(error));
                             }
                         }
@@ -259,9 +270,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 })) {
                     state.set(LauncherState::Error);
                     sync_state_text(&ui, LauncherState::Error);
-                    ui.set_detail_text(SharedString::from(format!(
-                        "failed to schedule launcher shutdown: {error}"
-                    )));
+                    let detail = format!("failed to schedule launcher shutdown: {error}");
+                    let _ = logging::log_error(&detail);
+                    ui.set_detail_text(SharedString::from(detail));
                     let _ = ui.hide();
                 }
             }
@@ -317,6 +328,7 @@ fn open_dashboard_and_show_detail(
         }
         Err(error) => {
             sync_state_text(ui, state.get());
+            let _ = logging::log_error(&format!("open dashboard failed: {error}"));
             ui.set_detail_text(SharedString::from(error.clone()));
             Err(error)
         }
@@ -336,6 +348,7 @@ fn apply_action_result(
         }
         Err(error) => {
             sync_state_text(ui, state.get());
+            let _ = logging::log_error(&format!("launcher action failed: {error}"));
             ui.set_detail_text(SharedString::from(error.clone()));
             Err(error)
         }

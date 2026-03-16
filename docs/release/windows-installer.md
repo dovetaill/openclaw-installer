@@ -1,5 +1,11 @@
 # OpenClaw Windows Installer Runbook
 
+## Support Target
+
+- Supported: `Windows 10 x64`, `Windows 11 x64`
+- Unsupported: `Windows 7`
+- Rationale: the bundled OpenClaw runtime requires Node.js 22.x, which is not a supported Windows 7 runtime baseline.
+
 ## Build
 
 1. 准备离线 payload 到 `packaging/windows/payload/`
@@ -26,6 +32,10 @@
    - 桌面快捷方式 `OpenClaw Launcher.lnk`
    - 开始菜单目录 `OpenClaw`
    - 当前用户卸载入口 `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\OpenClaw`
+4. 安装后日志位于 `<InstallRoot>\data\logs\`
+   - `launcher.log`
+   - `launcher-crash.log`
+   - `gateway.log` / `gateway.err.log`（当内置 runtime 成功启动并写日志时）
 
 ## Upgrade
 
